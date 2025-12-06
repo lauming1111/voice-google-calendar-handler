@@ -3,15 +3,83 @@ import './App.css';
 
 function App() {
   const [isRecording, setIsRecording] = useState(false);
-  const [status, setStatus] = useState('Ready to capture your ideas');
+  const [status, setStatus] = useState('Fetching greeting...');
+  const [opening, setOpening] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  const speak = async (text: string) => {
+    if (!('speechSynthesis' in window)) {
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const fetchOpening = async () => {
+    try {
+      setStatus('Fetching greeting...');
+      const response = await fetch('/api/opening', { method: 'GET' });
+      if (!response.ok) {
+        throw new Error('Failed to fetch opening');
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await response.json();
+        console.log('opening JSON:', data);
+        setOpening(data.message);
+        setStatus('Ready to capture your ideas');
+        speak(data.message);
+      } else {
+        // Received HTML (likely the React dev server index.html). Log for debugging.
+        const text = await response.text();
+        console.error('Expected JSON but received non-JSON response:', text.slice(0, 1000));
+        setStatus('Unable to fetch greeting');
+        setError('Server returned non-JSON response (check dev server proxy).');
+      }
+    } catch (err) {
+      console.log(123);
+      console.log(err);
+      setStatus('Unable to fetch greeting');
+      setError('Could not load the opening statement from the server.');
+    }
+  };
+
+  useEffect(() => {
+    fetchOpening();
+  }, []);
+
+  const sendAudioToBackend = async (blob: Blob) => {
+    setSubmissionMessage('Sending your recording to the assistant...');
+    try {
+      const formData = new FormData();
+      formData.append('audio', blob, 'recording.webm');
+      const response = await fetch('/api/voice', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Upload failed');
+      }
+      const data = await response.json();
+      setSubmissionMessage(`Assistant received your clip (${data.bytes} bytes).`);
+    } catch (err) {
+      setSubmissionMessage('We could not send your recording. Please try again.');
+    }
+  };
 
   const startRecording = async () => {
     try {
       setError(null);
+      setSubmissionMessage(null);
       setAudioUrl(null);
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         setError('Your browser does not support audio capture.');
@@ -36,6 +104,7 @@ function App() {
         setAudioUrl(url);
         setIsRecording(false);
         setStatus('Recording saved. Ready for the next idea.');
+        sendAudioToBackend(blob);
       };
 
       recorder.start();
@@ -52,6 +121,19 @@ function App() {
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop();
       setStatus('Wrapping up your recording...');
+    }
+  };
+
+  const handleStartRecording = async () => {
+    if (opening) {
+      speak(opening);
+      // Wait a moment for speech to start, then begin recording
+      // Adjust the timeout if needed based on opening message length
+      setTimeout(() => {
+        startRecording();
+      }, 2000);
+    } else {
+      startRecording();
     }
   };
 
@@ -76,13 +158,14 @@ function App() {
             Turn spoken thoughts into saved notes with one tap.
           </h1>
           <p className="subhead">
-            Hit record, speak naturally, and stop whenever you are done. We&apos;ll keep the latest
-            clip handy so you can preview or send it on.
+            Hit record, listen for your assistant&apos;s prompt, speak naturally, and we&apos;ll send
+            it to the backend for handling.
           </p>
+
 
           <div className="status-bar" aria-live="polite">
             <div className={`status-dot ${isRecording ? 'live' : ''}`} />
-            <span>{status}</span>
+            <span  >{status}</span>
           </div>
 
           {error && <div className="error">{error}</div>}
@@ -90,7 +173,8 @@ function App() {
           <div className="actions">
             <button
               className={`record-btn ${isRecording ? 'recording' : ''}`}
-              onClick={isRecording ? stopRecording : startRecording}
+              onClick={isRecording ? stopRecording : handleStartRecording}
+
             >
               <span className="icon">
                 <svg width="18" height="24" viewBox="0 0 18 24" fill="none" aria-hidden="true">
@@ -120,6 +204,8 @@ function App() {
               <audio controls src={audioUrl} />
             </div>
           )}
+
+          {submissionMessage && <p className="subhead submission">{submissionMessage}</p>}
         </div>
       </div>
     </div>

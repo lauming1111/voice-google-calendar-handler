@@ -229,6 +229,43 @@ audio {
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.35));
 }
 
+.opening {
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid var(--card-border);
+  background: rgba(255, 255, 255, 0.04);
+  display: grid;
+  gap: 6px;
+}
+
+.opening-line {
+  margin: 0;
+  font-size: 18px;
+  color: #f4f6ff;
+}
+
+.ghost-btn {
+  width: fit-content;
+  border: 1px solid var(--card-border);
+  background: transparent;
+  color: var(--text);
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.ghost-btn:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.submission {
+  margin-top: 6px;
+  color: var(--text-muted);
+}
+
 @keyframes drift {
   from {
     transform: translateY(0);
