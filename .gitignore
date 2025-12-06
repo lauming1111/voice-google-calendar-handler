@@ -1,0 +1,20 @@
+# Node/React artifacts
+node_modules/
+client/build/
+client/coverage/
+
+# Environment files
+.env
+.env.*
+client/.env.local
+client/.env.*.local
+
+# Python virtualenv and bytecode
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+
+# OS / editor noise
+.DS_Store
+*.log
