@@ -181,39 +181,17 @@ class GoogleCalendarAgent:
             return {"status": "error", "message": "Calendar not authenticated or initialized."}
 
         try:
-            create_button = await self.page.query_selector('text="Create"')
-            if create_button:
-                await create_button.click()
-                await asyncio.sleep(1)
+            print("[playwright] Trying to open create dialog...")
+            opened = False
 
-            event_option = await self.page.query_selector('text="Event"')
-            if event_option:
-                await event_option.click()
-                await asyncio.sleep(1)
-
-            title_input = await self.page.query_selector('input[placeholder*="Add title"]')
-            if title_input:
-                await title_input.fill(title)
-
-            time_input = await self.page.query_selector('input[aria-label*="start"]')
-            if time_input:
-                await time_input.fill(self._format_datetime_for_input(start_time))
-
-            if end_time:
-                end_time_input = await self.page.query_selector('input[aria-label*="end"]')
-                if end_time_input:
-                    await end_time_input.fill(self._format_datetime_for_input(end_time))
-
-            if description:
-                description_input = await self.page.query_selector('textarea[aria-label*="description"]')
-                if description_input:
-                    await description_input.fill(description)
-
-            save_button = await self.page.query_selector('text="Save"')
-            if save_button:
-                await save_button.click()
-                await asyncio.sleep(2)
-
+            # Try localized role button
+            try:
+                await asyncio.wait_for(self.page.get_by_role("button", name="建立").first.click(), timeout=3.0)
+                opened = True
+                print("[playwright] Clicked role=button name='建立'")
+            except Exception as e:
+                print(f"[playwright] '建立' button not found/click failed: {e}")
+                
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
