@@ -8,11 +8,23 @@ function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submissionMessage, setSubmissionMessage] = useState<string | null>(null);
+  const [transcript, setTranscript] = useState<string>('');
+  const [assistantReply, setAssistantReply] = useState<string | null>(null);
+  const [userActivatedAudio, setUserActivatedAudio] = useState<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<any>(null);
+  const hasSentRef = useRef<boolean>(false);
+  const stopTimeoutRef = useRef<number | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const silenceStartRef = useRef<number | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const [manualCommand, setManualCommand] = useState('');
 
   const speak = async (text: string) => {
-    if (!('speechSynthesis' in window)) {
+    if (!('speechSynthesis' in window) || !userActivatedAudio) {
       return;
     }
     window.speechSynthesis.cancel();
@@ -36,7 +48,10 @@ function App() {
         console.log('opening JSON:', data);
         setOpening(data.message);
         setStatus('Ready to capture your ideas');
-        speak(data.message);
+        // Only speak after user interaction to avoid autoplay restrictions.
+        if (userActivatedAudio) {
+          speak(data.message);
+        }
       } else {
         // Received HTML (likely the React dev server index.html). Log for debugging.
         const text = await response.text();
@@ -56,23 +71,133 @@ function App() {
     fetchOpening();
   }, []);
 
-  const sendAudioToBackend = async (blob: Blob) => {
-    setSubmissionMessage('Sending your recording to the assistant...');
+  const sendTranscriptToBackend = async (text: string) => {
+    hasSentRef.current = true;
+    setSubmissionMessage('Sending your command to the assistant...');
+    setAssistantReply(null);
+    console.log('[voice] Sending transcript:', JSON.stringify({ command: text }));
     try {
-      const formData = new FormData();
-      formData.append('audio', blob, 'recording.webm');
-      const response = await fetch('/api/voice', {
+      const response = await fetch('/api/calendar/command', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: text }),
       });
-
       if (!response.ok) {
-        throw new Error('Upload failed');
+        const errorText = await response.text();
+        console.error('[voice] Backend error response:', response.status, errorText);
+        throw new Error(`Command failed (${response.status})`);
       }
       const data = await response.json();
-      setSubmissionMessage(`Assistant received your clip (${data.bytes} bytes).`);
+      console.log('[voice] Backend response:', data);
+      setAssistantReply(JSON.stringify(data, null, 2));
+      setSubmissionMessage('Assistant processed your request.');
     } catch (err) {
-      setSubmissionMessage('We could not send your recording. Please try again.');
+      console.error('[voice] Command error:', err);
+      setSubmissionMessage('We could not process your command. Please try again.');
+    }
+  };
+
+  const startListening = () => {
+    if (isRecording) return;
+    if (!('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)) {
+      setError('Your browser does not support speech recognition.');
+      return;
+    }
+
+    const SpeechRecognitionConstructor =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionConstructor) {
+      setError('Speech recognition is not supported in this browser.');
+      return;
+    }
+    const recognition: any = new SpeechRecognitionConstructor();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = false;
+    recognition.maxAlternatives = 1;
+    recognitionRef.current = recognition;
+    hasSentRef.current = false;
+
+    recognition.onstart = () => {
+      console.log('[voice] recognition start');
+      setStatus('Listening... please speak your calendar request.');
+      setTranscript('');
+      setAssistantReply(null);
+      setError(null);
+    };
+
+    recognition.onresult = (event: any) => {
+      console.log('[voice] recognition result', event);
+      const results = event?.results;
+      if (!results) return;
+      // Show a live caption by concatenating all transcripts
+      const combined = Array.from(results)
+        .map((r: any) => r?.[0]?.transcript || '')
+        .join(' ')
+        .trim();
+      setTranscript(combined);
+
+      const idx = event.resultIndex ?? results.length - 1;
+      const result = results[idx];
+      const text = result?.[0]?.transcript?.trim() || '';
+      if (!text) return;
+
+      // Only send when the current result is final
+      if (result.isFinal) {
+        setStatus('Heard you. Sending to assistant...');
+        recognition.stop();
+        sendTranscriptToBackend(text);
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      const err = event?.error || 'unknown';
+      console.log('[voice] recognition error', err);
+      setIsRecording(false);
+      if (err === 'aborted' || err === 'no-speech') {
+        setStatus('Listening ended.');
+        return;
+      }
+      setError(`Speech recognition error: ${err}`);
+      setStatus('Unable to transcribe your voice.');
+    };
+
+    recognition.onend = () => {
+      console.log('[voice] recognition end');
+      setIsRecording(false);
+      // If we ended without sending but have a transcript, send it once.
+      if (!hasSentRef.current && transcript.trim()) {
+        sendTranscriptToBackend(transcript.trim());
+      }
+    };
+
+    recognition.start();
+    setIsRecording(true);
+  };
+
+  const stopListening = () => {
+    const recognition = recognitionRef.current;
+    if (stopTimeoutRef.current) {
+      clearTimeout(stopTimeoutRef.current);
+    }
+    if (recognition) {
+      try {
+        console.log('[voice] stopping recognition');
+        recognition.stop();
+      } catch (e) {
+        // ignore
+      }
+    }
+    stopRecording();
+  };
+
+  const handleToggle = () => {
+    if (isRecording) {
+      stopListening();
+    } else {
+      setUserActivatedAudio(true);
+      startRecording();
+      startListening();
     }
   };
 
@@ -87,6 +212,18 @@ function App() {
         return;
       }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Setup silence detection
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyserRef.current = analyser;
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
+      const bufferLength = analyser.fftSize;
+      const dataArray = new Uint8Array(bufferLength);
+      dataArrayRef.current = dataArray;
+
       const recorder = new MediaRecorder(stream);
       mediaRecorderRef.current = recorder;
       chunksRef.current = [];
@@ -99,17 +236,48 @@ function App() {
 
       recorder.onstop = () => {
         recorder.stream.getTracks().forEach(track => track.stop());
+        if (audioContextRef.current) {
+          audioContextRef.current.close();
+        }
+        if (rafRef.current) {
+          cancelAnimationFrame(rafRef.current);
+        }
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
         const url = URL.createObjectURL(blob);
         setAudioUrl(url);
         setIsRecording(false);
         setStatus('Recording saved. Ready for the next idea.');
-        sendAudioToBackend(blob);
       };
 
       recorder.start();
       setIsRecording(true);
       setStatus('Recording in progress...');
+
+      const silenceThreshold = 0.01;
+      const silenceDurationMs = 2000;
+
+      const monitorSilence = () => {
+        if (!analyserRef.current || !dataArrayRef.current) return;
+        analyserRef.current.getByteTimeDomainData(dataArrayRef.current);
+        const normalized =
+          dataArrayRef.current.reduce((acc, val) => acc + Math.abs(val - 128), 0) /
+          (128 * dataArrayRef.current.length);
+
+        const now = performance.now();
+        if (normalized < silenceThreshold) {
+          if (silenceStartRef.current === null) {
+            silenceStartRef.current = now;
+          } else if (now - silenceStartRef.current > silenceDurationMs) {
+            stopRecording();
+            return;
+          }
+        } else {
+          silenceStartRef.current = null;
+        }
+        rafRef.current = requestAnimationFrame(monitorSilence);
+      };
+
+      rafRef.current = requestAnimationFrame(monitorSilence);
     } catch (err) {
       setError('Microphone access was blocked. Please enable it to record.');
       setStatus('Unable to record');
@@ -117,23 +285,26 @@ function App() {
   };
 
   const stopRecording = () => {
+    silenceStartRef.current = null;
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {
+        // ignore
+      }
+    }
     const recorder = mediaRecorderRef.current;
     if (recorder && recorder.state !== 'inactive') {
       recorder.stop();
       setStatus('Wrapping up your recording...');
-    }
-  };
-
-  const handleStartRecording = async () => {
-    if (opening) {
-      speak(opening);
-      // Wait a moment for speech to start, then begin recording
-      // Adjust the timeout if needed based on opening message length
-      setTimeout(() => {
-        startRecording();
-      }, 2000);
-    } else {
-      startRecording();
     }
   };
 
@@ -173,8 +344,7 @@ function App() {
           <div className="actions">
             <button
               className={`record-btn ${isRecording ? 'recording' : ''}`}
-              onClick={isRecording ? stopRecording : handleStartRecording}
-
+              onClick={handleToggle}
             >
               <span className="icon">
                 <svg width="18" height="24" viewBox="0 0 18 24" fill="none" aria-hidden="true">
@@ -204,6 +374,37 @@ function App() {
               <audio controls src={audioUrl} />
             </div>
           )}
+
+          {transcript && (
+            <div className="playback">
+              <p className="subtle">You said</p>
+              <pre className="transcript">{transcript}</pre>
+            </div>
+          )}
+
+          {assistantReply && (
+            <div className="playback">
+              <p className="subtle">Assistant reply</p>
+              <pre className="transcript">{assistantReply}</pre>
+            </div>
+          )}
+
+          <div className="playback">
+            <p className="subtle">Manual command</p>
+            <textarea
+              value={manualCommand}
+              onChange={e => setManualCommand(e.target.value)}
+              rows={3}
+              style={{ width: '100%', resize: 'vertical' }}
+              placeholder="Type a command to send to the assistant"
+            />
+            <button
+              className="record-btn"
+              onClick={() => manualCommand.trim() && sendTranscriptToBackend(manualCommand.trim())}
+            >
+              Send text command
+            </button>
+          </div>
 
           {submissionMessage && <p className="subhead submission">{submissionMessage}</p>}
         </div>

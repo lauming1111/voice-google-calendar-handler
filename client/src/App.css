@@ -229,6 +229,17 @@ audio {
   filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.35));
 }
 
+.transcript {
+  margin: 0;
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.15);
+  padding: 10px;
+  border-radius: 10px;
+  color: #e9eeff;
+  font-family: "SF Mono", "Roboto Mono", "Courier New", monospace;
+  font-size: 14px;
+}
+
 .opening {
   padding: 16px 18px;
   border-radius: 16px;
