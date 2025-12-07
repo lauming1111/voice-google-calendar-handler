@@ -1,3 +1,69 @@
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Node / JavaScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+yarn.lock
+
+# React build and env
+client/build/
+client/.env
+client/.env.local
+client/.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+pip-log.txt
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+venv/*
+flask-server/.venv/
+flask-server/venv/
+
+# Flask / app
+instance/
+*.sqlite3
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# macOS
+.DS_Store
+
+# Environment files
+.env
+.env.*
+
+# Misc
+*.pem
+*.p12
 # Node/React artifacts
 node_modules/
 client/build/
@@ -18,3 +84,4 @@ __pycache__/
 # OS / editor noise
 .DS_Store
 *.log
+.pw_profile
