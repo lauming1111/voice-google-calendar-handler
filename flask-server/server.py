@@ -27,11 +27,18 @@ def parse_with_ollama(text: str):
     model = os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
     host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     system_prompt = (
-        "You convert natural language calendar requests into JSON. "
-        "Return only JSON with keys: title (string), start (string), end (string or null), description (string or null). "
+        "You convert natural language calendar requests into JSON."
+        "Return only JSON with keys: title (string), start (string), end (string or null), description (string or null)."
         "Do not include extra text."
+        f"Today is {datetime.now().strftime('%Y-%m-%d %A')}."
+        "First day of week is Sunday, Saturday is the last day."
+        "next week means the week after the current week, next friday means the Friday in the next week."
+        "be careful of the time format. 12 or 24 hour is acceptable, but include AM/PM if using 12 hour."
+        "use Toronto timezone."
     )
     user_prompt = f'Text: """{text}"""\nReturn JSON now.'
+    print(system_prompt)
+    print(user_prompt)
     try:
         resp = requests.post(
             f"{host}/api/chat",
