@@ -192,6 +192,14 @@ class GoogleCalendarAgent:
             except Exception as e:
                 print(f"[playwright] '建立' button not found/click failed: {e}")
                 
+            try:
+                await asyncio.wait_for(self.page.locator("li[role='menuitem']", has_text="活動").click(), timeout=3.0)
+                # await asyncio.wait_for(self.page.locator('span').get_by_text("活動", exact=True).first.click(), timeout=3.0)
+                opened = True
+                print("[playwright] Clicked role=span name='活動'")
+            except Exception as e:
+                print(f"[playwright] '活動' span not found/click failed: {e}")
+
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
