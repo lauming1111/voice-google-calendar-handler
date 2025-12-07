@@ -67,7 +67,8 @@ def parse_with_ollama(text: str):
     except Exception as e:
         print(f"[ollama] parse failed: {e}")
         return {"error": str(e)}
-
+    # return {"title": "Meeting with CEO", "start": "2025-12-08T10:00:00Z", "end": "2025-12-08T20:00:00Z", "description": None}
+    
 @app.route('/api/opening', methods=['GET'])
 def opening():
     greetings = [
@@ -176,9 +177,15 @@ def calendar_command():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         agent = loop.run_until_complete(ensure_agent_ready())
-        result = loop.run_until_complete(agent.process_structured_command(parsed_payload))
-
-        return jsonify(result)
+        try:
+            result = loop.run_until_complete(agent.process_structured_command(parsed_payload))
+            return jsonify(result)
+        finally:
+            try:
+                loop.run_until_complete(agent.close())
+                print("[endpoint] Closed calendar agent after /calendar/command")
+            except Exception as e_close:
+                print(f"[endpoint] Failed to close agent: {e_close}")
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -197,8 +204,15 @@ def calendar_create():
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         agent = loop.run_until_complete(ensure_agent_ready())
-        result = loop.run_until_complete(agent.process_structured_command(payload))
-        return jsonify(result)
+        try:
+            result = loop.run_until_complete(agent.process_structured_command(payload))
+            return jsonify(result)
+        finally:
+            try:
+                loop.run_until_complete(agent.close())
+                print("[endpoint] Closed calendar agent after /calendar/create")
+            except Exception as e_close:
+                print(f"[endpoint] Failed to close agent: {e_close}")
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
