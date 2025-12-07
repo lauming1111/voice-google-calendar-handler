@@ -1,16 +1,65 @@
 import random
 import asyncio
 import os
+import json
+import traceback
 from datetime import datetime
+from pathlib import Path
+
+import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from dotenv import load_dotenv
+
 from calendar_agent import ensure_agent_ready
-import traceback
+
+
 
 
 app = Flask(__name__)
 CORS(app)
 
+
+def parse_with_ollama(text: str):
+    """
+    Use a local Ollama model to parse free-form text into a structured payload.
+    """
+    model = os.getenv("OLLAMA_MODEL", "gpt-oss:latest")
+    host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
+    system_prompt = (
+        "You convert natural language calendar requests into JSON. "
+        "Return only JSON with keys: title (string), start (string), end (string or null), description (string or null). "
+        "Do not include extra text."
+    )
+    user_prompt = f'Text: """{text}"""\nReturn JSON now.'
+    try:
+        resp = requests.post(
+            f"{host}/api/chat",
+            json={
+                "model": model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                "stream": False,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        content = data.get("message", {}).get("content", "") or data.get("response", "") or ""
+        content = content.strip()
+        if content.startswith("```"):
+            content = content.strip("`")
+            parts = content.split("\n", 1)
+            if len(parts) == 2:
+                content = parts[1]
+        parsed = json.loads(content)
+        print(f"[ollama] Parsed payload: {parsed}")
+        return parsed
+    except Exception as e:
+        print(f"[ollama] parse failed: {e}")
+        return {"error": str(e)}
 
 @app.route('/api/opening', methods=['GET'])
 def opening():
@@ -109,13 +158,22 @@ def calendar_command():
         if not command:
             return jsonify({"error": "No command provided"}), 400
 
+        parsed_payload = parse_with_ollama(command)
+        print("[endpoint] Ollama parse result:", parsed_payload)
+
+        if parsed_payload.get("error"):
+            return jsonify({"error": f"Ollama parsing failed: {parsed_payload['error']}"}), 500
+        if not parsed_payload.get("title") or not parsed_payload.get("start"):
+            return jsonify({"error": "Ollama parsing returned incomplete payload"}), 500
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         agent = loop.run_until_complete(ensure_agent_ready())
-        result = loop.run_until_complete(agent.process_voice_command(command))
+        result = loop.run_until_complete(agent.process_structured_command(parsed_payload))
 
         return jsonify(result)
     except Exception as e:
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 
