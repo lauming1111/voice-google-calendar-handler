@@ -173,6 +173,11 @@ class GoogleCalendarAgent:
         except Exception:
             return None
 
+    async def _delay(self) -> None:
+        """Optional pause to run in slow mode for stability/demo."""
+        if self.action_delay > 0:
+            await asyncio.sleep(self.action_delay)
+
     async def create_event(self, title: str, start_time, end_time=None, description: str = "") -> dict:
         """
         Create a calendar event by automating the UI.
@@ -200,22 +205,23 @@ class GoogleCalendarAgent:
             opened = False
 
             # Try localized role button
-            try:
-                await asyncio.wait_for(self.page.get_by_role("button", name="建立").first.click(), timeout=3.0)
-                opened = True
-                print("[playwright] Clicked role=button name='建立'")
-            except Exception as e:
-                print(f"[playwright] '建立' button not found/click failed: {e}")
-                
-            try:
-                await asyncio.wait_for(self.page.locator("li[role='menuitem']", has_text="活動").click(), timeout=3.0)
-                # await asyncio.wait_for(self.page.locator('span').get_by_text("活動", exact=True).first.click(), timeout=3.0)
-                opened = True
-                print("[playwright] Clicked role=span name='活動'")
-            except Exception as e:
-                print(f"[playwright] '活動' span not found/click failed: {e}")
+            await asyncio.wait_for(self.page.get_by_role("button", name="建立").first.click(), timeout=3.0)
+            await asyncio.wait_for(self.page.locator("li[role='menuitem']", has_text="活動").click(), timeout=3.0)
 
             await asyncio.wait_for(self.page.get_by_placeholder("新增標題").fill(title), timeout=3.0)
+            await self._delay()
+            await asyncio.wait_for(self.page.locator("span[data-key='startDate']").click(), timeout=3.0)
+            await self._delay()
+            await asyncio.wait_for(self.page.locator("input[aria-label='開始日期']").fill(start_date_str), timeout=3.0)
+            await self._delay()
+            await asyncio.wait_for(self.page.locator("input[aria-label='開始時間']").fill(start_time_str), timeout=3.0)
+            await self._delay()
+
+            await asyncio.wait_for(self.page.locator("input[aria-label='結束時間']").click(), timeout=3.0)
+            await self._delay()
+            await asyncio.wait_for(self.page.locator("input[aria-label='結束時間']").fill(end_time_str), timeout=3.0)
+            await self._delay()
+
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
