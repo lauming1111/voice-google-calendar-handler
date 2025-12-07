@@ -200,6 +200,7 @@ class GoogleCalendarAgent:
             except Exception as e:
                 print(f"[playwright] '活動' span not found/click failed: {e}")
 
+            await asyncio.wait_for(self.page.get_by_placeholder("新增標題").fill(title), timeout=3.0)
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
