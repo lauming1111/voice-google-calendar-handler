@@ -180,6 +180,21 @@ class GoogleCalendarAgent:
         if not self.page or not self.is_authenticated:
             return {"status": "error", "message": "Calendar not authenticated or initialized."}
 
+        start_dt = self._coerce_datetime(start_time)
+        end_dt = self._coerce_datetime(end_time) if end_time else None
+
+        if not start_dt:
+            return {"status": "error", "message": "Invalid start time provided."}
+
+        start_date_str = start_dt.strftime("%Y/%m/%d")
+        start_time_str = start_dt.strftime("%H:%M")
+
+        end_date_str = None
+        end_time_str = None
+        if end_dt:
+            end_date_str = end_dt.strftime("%Y/%m/%d")
+            end_time_str = end_dt.strftime("%H:%M")
+
         try:
             print("[playwright] Trying to open create dialog...")
             opened = False
@@ -413,6 +428,23 @@ class GoogleCalendarAgent:
         if isinstance(dt, datetime):
             return dt.strftime("%b %d, %Y %I:%M %p")
         return str(value)
+
+    def _coerce_datetime(self, value) -> Optional[datetime]:
+        """
+        Normalize incoming values (datetime or string) to a datetime instance for Playwright fills.
+        """
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value
+        if isinstance(value, str):
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except Exception:
+                parsed = dateparser.parse(value, settings={"PREFER_DATES_FROM": "future"})
+                if parsed:
+                    return parsed
+        return None
 
     async def process_structured_command(self, payload: dict) -> dict:
         """
