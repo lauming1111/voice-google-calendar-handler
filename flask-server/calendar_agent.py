@@ -222,6 +222,8 @@ class GoogleCalendarAgent:
             await asyncio.wait_for(self.page.locator("input[aria-label='結束時間']").fill(end_time_str), timeout=3.0)
             await self._delay()
 
+            await asyncio.wait_for(self.page.get_by_role("button", name="Save").click(), timeout=3.0)
+            await self._delay()
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
