@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import './App.css';
 
 function App() {
+  // Default to local backend if env not provided
+  const API_BASE = (process.env.REACT_APP_API_BASE || 'http://127.0.0.1:8080').replace(/\/$/, '');
   const [isRecording, setIsRecording] = useState(false);
   const [status, setStatus] = useState('Fetching greeting...');
   const [opening, setOpening] = useState<string | null>(null);
@@ -11,6 +13,7 @@ function App() {
   const [transcript, setTranscript] = useState<string>('');
   const [assistantReply, setAssistantReply] = useState<string | null>(null);
   const [userActivatedAudio, setUserActivatedAudio] = useState<boolean>(false);
+  const [isSending, setIsSending] = useState<boolean>(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const recognitionRef = useRef<any>(null);
@@ -37,7 +40,7 @@ function App() {
   const fetchOpening = async () => {
     try {
       setStatus('Fetching greeting...');
-      const response = await fetch('/api/opening', { method: 'GET' });
+      const response = await fetch(`${API_BASE}/api/opening`, { method: 'GET' });
       if (!response.ok) {
         throw new Error('Failed to fetch opening');
       }
@@ -73,11 +76,12 @@ function App() {
 
   const sendTranscriptToBackend = async (text: string) => {
     hasSentRef.current = true;
+    setIsSending(true);
     setSubmissionMessage('Sending your command to the assistant...');
     setAssistantReply(null);
     console.log('[voice] Sending transcript:', JSON.stringify({ command: text }));
     try {
-      const response = await fetch('/api/calendar/command', {
+      const response = await fetch(`${API_BASE}/api/calendar/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: text }),
@@ -85,15 +89,21 @@ function App() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[voice] Backend error response:', response.status, errorText);
-        throw new Error(`Command failed (${response.status})`);
+        throw new Error(`Command failed (${response.status}): ${errorText}`);
       }
       const data = await response.json();
       console.log('[voice] Backend response:', data);
-      setAssistantReply(JSON.stringify(data, null, 2));
-      setSubmissionMessage('Assistant processed your request.');
-    } catch (err) {
+
+      if (data.status === 'success') {
+        const resp = `Success, please check the detail in https://calendar.google.com/calendar/u/0/r`;
+        setAssistantReply(JSON.stringify(resp, null, 2));
+        setSubmissionMessage('Assistant processed your request.');
+      }
+    } catch (err: any) {
       console.error('[voice] Command error:', err);
-      setSubmissionMessage('We could not process your command. Please try again.');
+      setSubmissionMessage(`We could not process your command. ${err?.message || ''}`.trim());
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -400,9 +410,10 @@ function App() {
             />
             <button
               className="record-btn"
-              onClick={() => manualCommand.trim() && sendTranscriptToBackend(manualCommand.trim())}
+              onClick={() => manualCommand.trim() && !isSending && sendTranscriptToBackend(manualCommand.trim())}
+              disabled={isSending}
             >
-              Send text command
+              {isSending ? 'Sending...' : 'Send text command'}
             </button>
           </div>
 
