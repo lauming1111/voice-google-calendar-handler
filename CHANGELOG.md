@@ -24,5 +24,3 @@ All notable changes to this project will be documented in this file. See [standa
 * **frontend:** basic voice input button ([7db6960](https://github.com/lauming1111/voice-google-calendar-handler/commit/7db69601fc7902fed3cb464f83e74a7fec90a96a))
 * **frontend:** prevent duplicate requests of button Send text command ([4e5ef67](https://github.com/lauming1111/voice-google-calendar-handler/commit/4e5ef6721307857141d65f1007e3ee995ad968b0))
 * **frontend:** re-work record button ([58c3e70](https://github.com/lauming1111/voice-google-calendar-handler/commit/58c3e70c616ea8a6a19c025fa2c69ff9614727ab))
-
-### [1.1.1](https://github.com/lauming1111/voice-google-calendar-handler/compare/v1.1.0...v1.1.1) (2025-12-08)
