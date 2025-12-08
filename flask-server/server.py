@@ -135,17 +135,6 @@ def init_calendar():
         # If not authenticated, capture a screenshot for debugging (base64)
         if not agent.is_authenticated:
             print("[endpoint] Not authenticated, attempting screenshot...")
-            screenshot = loop.run_until_complete(agent.screenshot_bytes())
-            if screenshot:
-                import base64
-                response['screenshot_base64'] = base64.b64encode(screenshot).decode('ascii')
-                # Also save to file for manual inspection
-                screenshot_path = os.path.join(os.path.dirname(__file__), "screenshot_debug.png")
-                with open(screenshot_path, "wb") as f:
-                    f.write(screenshot)
-                print(f"[endpoint] Screenshot saved to {screenshot_path}")
-            else:
-                print("[endpoint] Screenshot was None")
 
         return jsonify(response)
     except Exception as e:
