@@ -83,13 +83,13 @@ function App() {
       console.log('[voice] Backend response:', data);
 
       if (data.status === 'success') {
-        const resp = `Success, please check the detail in https://calendar.google.com/calendar/u/0/r`;
-        setAssistantReply(JSON.stringify(resp, null, 2));
+        const resp = `Success, please check the detail in https://calendar.google.com/calendar`;
+        setAssistantReply(resp);
         setSubmissionMessage('Assistant processed your request.');
       }
     } catch (err: any) {
       console.error('[voice] Command error:', err);
-      setSubmissionMessage('I couldn’t handle that. Please say or type your request again.');
+      setSubmissionMessage('I couldn’t handle that. Please say or type your request again. Make sure to speak clearly and provide complete information. Like date, time, and event details.');
     } finally {
       setIsSending(false);
     }
