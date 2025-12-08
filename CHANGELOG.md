@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [1.1.0](https://github.com/lauming1111/voice-google-calendar-handler/compare/v1.0.0...v1.1.0) (2025-12-08)
+
+
+### Features
+
+* **backend:** handle error message ([6fd4c23](https://github.com/lauming1111/voice-google-calendar-handler/commit/6fd4c234162f39e29ef50ea8a058177ac731f562))
+
 ## 1.0.0 (2025-12-08)
 
 
