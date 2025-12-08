@@ -3,6 +3,7 @@
 Automates Google Calendar via Playwright (no Google API keys). Includes a Flask backend and a React client with voice or text commands.
 
 ## Prerequisites
+- Prefer Unix OS
 - Python 3.9+
 - Node.js 18+ and npm
 - Google Chrome (set `CHROME_EXECUTABLE` to its path)
