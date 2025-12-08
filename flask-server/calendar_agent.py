@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Optional
 
 import dateparser
+from dotenv import load_dotenv
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page, Playwright
+
 
 
 class GoogleCalendarAgent:
@@ -29,10 +31,9 @@ class GoogleCalendarAgent:
         self.chrome_user_data_dir = os.environ.get("CHROME_USER_DATA_DIR")
         self.state_path = os.path.join(self.user_data_dir, "storage_state.json")
         self.cookies_path = os.environ.get("PLAYWRIGHT_COOKIES_FILE", os.path.join(self.user_data_dir, "cookies.json"))
-        self.chrome_executable = os.environ.get(
-            "CHROME_EXECUTABLE",
-            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-        )
+        self.chrome_executable = os.environ.get( "CHROME_EXECUTABLE")
+        # Slow mode: delay between actions (seconds)
+        self.action_delay = float(os.environ.get("PLAYWRIGHT_ACTION_DELAY", "0.5"))
 
     async def initialize(self, headless: bool = False, user_data_dir: Optional[str] = None) -> None:
         """
@@ -194,36 +195,86 @@ class GoogleCalendarAgent:
         start_date_str = start_dt.strftime("%Y/%m/%d")
         start_time_str = start_dt.strftime("%H:%M")
 
-        end_date_str = None
         end_time_str = None
         if end_dt:
-            end_date_str = end_dt.strftime("%Y/%m/%d")
             end_time_str = end_dt.strftime("%H:%M")
 
         try:
             print("[playwright] Trying to open create dialog...")
-            opened = False
+            try:
+                await asyncio.wait_for(self.page.get_by_role("button", name="Create").first.click(), timeout=3.0)
+            except Exception as e:
+                print(f"Failed to click Create button: {e}")
+            try:
+                await asyncio.wait_for(self.page.locator("li[role='menuitem']", has_text="Event").click(), timeout=3.0)
+            except Exception as e:
+                print(f"Failed to click Event button: {e}")
 
-            # Try localized role button
-            await asyncio.wait_for(self.page.get_by_role("button", name="建立").first.click(), timeout=3.0)
-            await asyncio.wait_for(self.page.locator("li[role='menuitem']", has_text="活動").click(), timeout=3.0)
+            try:
+                await asyncio.wait_for(self.page.get_by_placeholder("Add title").fill(title), timeout=3.0)
+                await self._delay()
+            except Exception as e:
+                print(f"Failed to fill title: {e}")
+            try:
+                await asyncio.wait_for(self.page.locator("span[data-key='startDate']").click(), timeout=3.0)
+                await self._delay()
+            except Exception as e:
+                print(f"Failed to click start date: {e}")
+            try:
+                await asyncio.wait_for(
+                    self.page.locator("input[aria-label='Start date'], input[aria-label='開始日期']").fill(start_date_str),
+                    timeout=3.0,
+                )
+                await self._delay()
+            except Exception as e:
+                print(f"Failed to fill start date (input): {e}")
+                try:
+                    # Fallback to span with data-key
+                    await asyncio.wait_for(self.page.locator("span[data-key='startDate']").click(), timeout=3.0)
+                    await asyncio.wait_for(self.page.keyboard.press(select_all), timeout=2.0)
+                    await asyncio.wait_for(self.page.keyboard.type(start_date_str), timeout=2.0)
+                    await self._delay()
+                except Exception as e2:
+                    print(f"Failed to fill start date (span): {e2}")
+            try:
+                await asyncio.wait_for(
+                    self.page.locator("input[aria-label='Start time'], input[aria-label='開始時間']").fill(start_time_str),
+                    timeout=3.0,
+                )
+                await self._delay()
+            except Exception as e:
+                print(f"Failed to fill start time (input): {e}")
+                try:
+                    await asyncio.wait_for(self.page.locator("span[data-key='startTime']").click(), timeout=3.0)
+                    await asyncio.wait_for(self.page.keyboard.press(select_all), timeout=2.0)
+                    await asyncio.wait_for(self.page.keyboard.type(start_time_str), timeout=2.0)
+                    await self._delay()
+                except Exception as e2:
+                    print(f"Failed to fill start time (span): {e2}")
 
-            await asyncio.wait_for(self.page.get_by_placeholder("新增標題").fill(title), timeout=3.0)
-            await self._delay()
-            await asyncio.wait_for(self.page.locator("span[data-key='startDate']").click(), timeout=3.0)
-            await self._delay()
-            await asyncio.wait_for(self.page.locator("input[aria-label='開始日期']").fill(start_date_str), timeout=3.0)
-            await self._delay()
-            await asyncio.wait_for(self.page.locator("input[aria-label='開始時間']").fill(start_time_str), timeout=3.0)
-            await self._delay()
+            if end_time_str:
+                try:
+                    end_input = self.page.locator("input[aria-label='End time'], input[aria-label='結束時間']")
+                    await asyncio.wait_for(end_input.click(), timeout=3.0)
+                    await self._delay()
+                    await asyncio.wait_for(end_input.fill(end_time_str), timeout=3.0)
+                    await self._delay()
+                except Exception as e:
+                    print(f"Failed to fill end time (input): {e}")
+                    try:
+                        await asyncio.wait_for(self.page.locator("span[data-key='endTime']").click(), timeout=3.0)
+                        await asyncio.wait_for(self.page.keyboard.press(select_all), timeout=2.0)
+                        await asyncio.wait_for(self.page.keyboard.type(end_time_str), timeout=2.0)
+                        await self._delay()
+                    except Exception as e2:
+                        print(f"Failed to fill end time (span): {e2}")
 
-            await asyncio.wait_for(self.page.locator("input[aria-label='結束時間']").click(), timeout=3.0)
-            await self._delay()
-            await asyncio.wait_for(self.page.locator("input[aria-label='結束時間']").fill(end_time_str), timeout=3.0)
-            await self._delay()
-
-            await asyncio.wait_for(self.page.get_by_role("button", name="Save").click(), timeout=3.0)
-            await self._delay()
+            try:
+                await asyncio.wait_for(self.page.get_by_role("button", name="Save").click(), timeout=3.0)
+                await self._delay()
+            except Exception as e:
+                print(f"Failed to click Save button: {e}")
+            
             return {
                 "status": "success",
                 "message": f"Event '{title}' created successfully",
