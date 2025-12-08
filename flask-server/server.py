@@ -35,6 +35,8 @@ def parse_with_ollama(text: str):
         "next week means the week after the current week, next friday means the Friday in the next week."
         "be careful of the time format. 12 or 24 hour is acceptable, but include AM/PM if using 12 hour."
         "use Toronto timezone."
+        "all meeting time at least take 1 hour if they dont specified."
+        "if user input is incomplete or ambiguous, return an error message in the 'error' field."
     )
     user_prompt = f'Text: """{text}"""\nReturn JSON now.'
     print(system_prompt)
